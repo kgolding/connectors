@@ -1,58 +1,136 @@
 <script lang="ts">
-	import DSub15, { type Gender, type Variant, type View } from '$lib/DSub15.svelte';
+	import DSub, { PIN_COUNT, type Gender, type Variant, type View } from '$lib/DSub.svelte';
 
 	let variant = $state<Variant>('DA15');
 	let gender = $state<Gender>('male');
-	let view = $state<View>('front');
+	let view = $state<View>('back');
 	// Kept unbounded so the animation always turns the short way round.
 	let rotation = $state(0);
 
 	const displayAngle = $derived(((rotation % 360) + 360) % 360);
+
+	// Comma, space or newline separated pin numbers; ranges like 2-5 allowed.
+	let usedText = $state('');
+	const parsed = $derived.by(() => {
+		const max = PIN_COUNT[variant];
+		const pins = new Set<number>();
+		const invalid: string[] = [];
+		for (const token of usedText.split(/[\s,;]+/).filter(Boolean)) {
+			const m = token.match(/^(\d+)(?:-(\d+))?$/);
+			const from = m ? Number(m[1]) : NaN;
+			const to = m?.[2] ? Number(m[2]) : from;
+			if (!m || from < 1 || to > max || from > to) {
+				invalid.push(token);
+				continue;
+			}
+			for (let n = from; n <= to; n++) pins.add(n);
+		}
+		return { pins: [...pins].sort((a, b) => a - b), invalid, max };
+	});
+
+	const STAGE_PAD = 16;
+	const BUTTON_ROW = 64;
+	let canvasWidth = $state(0);
+	let canvasHeight = $state(0);
+
+	function onkeydown(e: KeyboardEvent) {
+		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+		// Arrow keys move between radio buttons, so leave form fields alone.
+		const t = e.target as HTMLElement;
+		if (t.closest('input, select, textarea, [contenteditable]')) return;
+		if (e.key === 'ArrowLeft') rotation -= 90;
+		else if (e.key === 'ArrowRight') rotation += 90;
+		else return;
+		e.preventDefault();
+	}
 </script>
 
+<svelte:window {onkeydown} />
+
 <svelte:head>
-	<title>15-pin D-Sub</title>
+	<title>D-Sub Pinouts</title>
 </svelte:head>
 
 <main>
-	<h1>15-pin D-Sub connector</h1>
+	<h1>D-Sub connector pinout</h1>
 
-	<div class="controls">
-		<fieldset>
-			<legend>Type</legend>
-			<label><input type="radio" bind:group={variant} value="DA15" /> DA-15 (2 rows)</label>
-			<label><input type="radio" bind:group={variant} value="DE15" /> DE-15 HD (3 rows)</label>
-		</fieldset>
+	<div class="layout">
+		<div class="controls">
+			<fieldset>
+				<legend>Type</legend>
+				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DE9" /> DE-9</label>
+				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DE15" /> DE-15 HD (VGA)</label>
+				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DA15" /> DA-15</label>
+				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DB25" /> DB-25</label>
+			</fieldset>
 
-		<fieldset>
-			<legend>Gender</legend>
-			<label><input type="radio" bind:group={gender} value="male" /> Male (pins)</label>
-			<label><input type="radio" bind:group={gender} value="female" /> Female (sockets)</label>
-		</fieldset>
+			<fieldset>
+				<legend>Gender</legend>
+				<label><input type="radio" name="gender" autocomplete="off" bind:group={gender} value="male" /> Male (pins)</label>
+				<label><input type="radio" name="gender" autocomplete="off" bind:group={gender} value="female" /> Female (sockets)</label>
+			</fieldset>
 
-		<fieldset>
-			<legend>View</legend>
-			<label><input type="radio" bind:group={view} value="front" /> Front (mating face)</label>
-			<label><input type="radio" bind:group={view} value="back" /> Back (wiring side)</label>
-		</fieldset>
+			<fieldset>
+				<legend>View</legend>
+				<label><input type="radio" name="view" autocomplete="off" bind:group={view} value="back" /> Back (wiring side)</label>
+				<label><input type="radio" name="view" autocomplete="off" bind:group={view} value="front" /> Front (mating face)</label>
+			</fieldset>
 
-		<fieldset>
-			<legend>Rotation · {displayAngle}°</legend>
-			<div class="buttons">
-				<button onclick={() => (rotation -= 90)} title="Rotate 90° anticlockwise">⟲ 90°</button>
-				<button onclick={() => (rotation += 90)} title="Rotate 90° clockwise">⟳ 90°</button>
-				<button onclick={() => (rotation = Math.round(rotation / 360) * 360)} disabled={displayAngle === 0}>
-					Reset
-				</button>
+			<fieldset class="used">
+				<legend>Pins used</legend>
+				<textarea
+					bind:value={usedText}
+					rows="3"
+					placeholder="e.g. 1, 2, 5, 7-9"
+					spellcheck="false"
+					aria-describedby="used-status"
+				></textarea>
+				<small id="used-status" class:error={parsed.invalid.length > 0}>
+					{#if parsed.invalid.length}
+						Ignored: {parsed.invalid.join(', ')} (pins are 1–{parsed.max})
+					{:else if parsed.pins.length}
+						{parsed.pins.length} of {parsed.max} pins used
+					{:else}
+						Comma separated; ranges like 7-9 work
+					{/if}
+				</small>
+			</fieldset>
+		</div>
+
+		<div class="drawing">
+			<div class="stage">
+				<button
+					class="corner left"
+					onclick={() => (rotation -= 90)}
+					title="Rotate 90° anticlockwise (←)"
+					aria-label="Rotate 90° anticlockwise">⟲</button
+				>
+				<button
+					class="angle"
+					onclick={() => (rotation = Math.round(rotation / 360) * 360)}
+					disabled={displayAngle === 0}
+					title="Reset rotation">{displayAngle}°</button
+				>
+				<button
+					class="corner right"
+					onclick={() => (rotation += 90)}
+					title="Rotate 90° clockwise (→)"
+					aria-label="Rotate 90° clockwise">⟳</button
+				>
+				<!-- Absolutely positioned so the drawing's size never feeds back into the stage's. -->
+				<div
+					class="canvas"
+					style:inset="{BUTTON_ROW}px {STAGE_PAD}px {STAGE_PAD}px"
+					bind:clientWidth={canvasWidth}
+					bind:clientHeight={canvasHeight}
+				>
+					<DSub {variant} {gender} {view} {rotation} maxWidth={canvasWidth} maxHeight={canvasHeight} used={parsed.pins} />
+				</div>
 			</div>
-		</fieldset>
-	</div>
 
-	<div class="stage">
-		<DSub15 {variant} {gender} {view} {rotation} />
+			<p class="note">Pin 1 is outlined in red. Pin numbers stay upright whatever the rotation. Use ← and → to rotate.</p>
+		</div>
 	</div>
-
-	<p class="note">Pin 1 is outlined in red. Pin numbers stay upright whatever the rotation.</p>
 </main>
 
 <style>
@@ -73,6 +151,10 @@
 		--accent: #d23c3c;
 		--label: #111;
 		--label-halo: #fff;
+		--used: #1f8a4c;
+		--used-edge: #0f5a30;
+		--used-label: #fff;
+		--error: #c0392b;
 	}
 	@media (prefers-color-scheme: dark) {
 		:global(:root) {
@@ -85,6 +167,10 @@
 			--metal-light: #9a9fa8;
 			--metal-edge: #4a4e55;
 			--insulator: #0d0e10;
+			--used: #2fb368;
+			--used-edge: #7be0a6;
+			--used-label: #06210f;
+			--error: #ff7b6b;
 		}
 	}
 	:global(body) {
@@ -95,17 +181,46 @@
 	}
 	main {
 		max-width: 960px;
+		min-height: 100dvh;
+		box-sizing: border-box;
 		margin: 0 auto;
-		padding: 24px 16px;
+		padding: 24px 16px 8px;
+		display: flex;
+		flex-direction: column;
 	}
 	h1 {
 		font-size: 1.5rem;
 		margin: 0 0 16px;
 	}
+	.layout {
+		flex: 1;
+		display: grid;
+		grid-template-rows: auto 1fr;
+		gap: 16px;
+	}
+	.drawing {
+		display: flex;
+		flex-direction: column;
+	}
 	.controls {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 12px;
+	}
+	/* Very wide screens: controls become a column on the left of the stage. */
+	@media (min-width: 1400px) {
+		main {
+			max-width: 1600px;
+		}
+		.layout {
+			grid-template-columns: 220px minmax(0, 1fr);
+			grid-template-rows: 1fr;
+		}
+		.controls {
+			flex-direction: column;
+			flex-wrap: nowrap;
+			align-self: start;
+		}
 	}
 	fieldset {
 		background: var(--panel);
@@ -128,9 +243,27 @@
 		gap: 6px;
 		cursor: pointer;
 	}
-	.buttons {
-		display: flex;
-		gap: 6px;
+	.used {
+		flex: 1 1 220px;
+	}
+	textarea {
+		font: inherit;
+		font-family: ui-monospace, monospace;
+		font-size: 0.9rem;
+		padding: 6px 8px;
+		border-radius: 6px;
+		border: 1px solid var(--border);
+		background: var(--bg);
+		color: var(--fg);
+		resize: vertical;
+		min-height: 3.5em;
+	}
+	small {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+	small.error {
+		color: var(--error);
 	}
 	button {
 		font: inherit;
@@ -146,17 +279,44 @@
 		cursor: default;
 	}
 	.stage {
-		margin-top: 16px;
+		position: relative;
 		background: var(--panel);
 		border: 1px solid var(--border);
 		border-radius: 12px;
-		aspect-ratio: 1;
-		max-height: 70vh;
-		margin-inline: auto;
-		width: 100%;
-		max-width: 70vh;
+		flex: 1;
+		min-height: 320px;
+	}
+	.canvas {
+		position: absolute;
+		display: grid;
+		place-items: center;
+	}
+	.stage button {
+		position: absolute;
+		top: 10px;
+		height: 44px;
+		line-height: 1;
+	}
+	.corner {
+		width: 44px;
+		padding: 0;
+		font-size: 1.6rem;
+		border-radius: 8px;
+	}
+	.corner.left {
+		left: 10px;
+	}
+	.corner.right {
+		right: 10px;
+	}
+	.angle {
+		left: 50%;
+		transform: translateX(-50%);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
 	}
 	.note {
+		margin: 8px 0 0;
 		color: var(--muted);
 		font-size: 0.9rem;
 		text-align: center;

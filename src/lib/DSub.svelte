@@ -1,7 +1,9 @@
 <script lang="ts" module>
-	export type Variant = 'DA15' | 'DE15';
+	export type Variant = 'DE9' | 'DE15' | 'DA15' | 'DB25';
 	export type Gender = 'male' | 'female';
 	export type View = 'front' | 'back';
+
+	export const PIN_COUNT: Record<Variant, number> = { DE9: 9, DE15: 15, DA15: 15, DB25: 25 };
 </script>
 
 <script lang="ts">
@@ -12,52 +14,65 @@
 		variant = 'DA15',
 		gender = 'male',
 		view = 'front',
-		rotation = 0
-	}: { variant?: Variant; gender?: Gender; view?: View; rotation?: number } = $props();
+		rotation = 0,
+		maxWidth = 800,
+		maxHeight = 600,
+		used = []
+	}: {
+		variant?: Variant;
+		gender?: Gender;
+		view?: View;
+		rotation?: number;
+		maxWidth?: number;
+		maxHeight?: number;
+		/** Pins to highlight; when non-empty, the other pins are dimmed. */
+		used?: number[];
+	} = $props();
+
+	const usedSet = $derived(new Set(used));
+	const dimUnused = $derived(usedSet.size > 0);
 
 	type Pin = { n: number; x: number; y: number };
 
-	// Geometry in millimetres, as seen looking at the mating face of a male
-	// connector with the wide side of the D on top (pin 1 at top-left).
-	const GEOMETRY = {
-		DA15: {
-			flangeW: 53.0,
-			flangeH: 12.55,
-			holeSpacing: 47.04,
-			holeR: 1.55,
-			shellW: 33.3,
-			shellH: 8.0,
-			pinR: 1.05,
-			font: 1.15,
-			pins: (() => {
-				const p = 2.77;
-				const dy = 2.84 / 2;
-				const pins: Pin[] = [];
-				for (let i = 0; i < 8; i++) pins.push({ n: i + 1, x: (i - 3.5) * p, y: -dy });
-				for (let i = 0; i < 7; i++) pins.push({ n: i + 9, x: (i - 3) * p, y: dy });
-				return pins;
-			})()
-		},
-		DE15: {
-			flangeW: 30.81,
-			flangeH: 12.55,
-			holeSpacing: 25.0,
-			holeR: 1.55,
-			shellW: 18.2,
-			shellH: 8.7,
-			pinR: 0.85,
-			font: 0.95,
-			pins: (() => {
-				const p = 2.29;
-				const dy = 1.98;
-				const pins: Pin[] = [];
-				for (let i = 0; i < 5; i++) pins.push({ n: i + 1, x: (i - 2) * p, y: -dy });
-				for (let i = 0; i < 5; i++) pins.push({ n: i + 6, x: (i - 2.5) * p, y: 0 });
-				for (let i = 0; i < 5; i++) pins.push({ n: i + 11, x: (i - 2) * p, y: dy });
-				return pins;
-			})()
-		}
-	} as const;
+	const PITCH = 2.77;
+	const ROW = 2.84;
+
+	// Standard density: top row has one more pin than the bottom row, which is
+	// offset by half a pitch.
+	function standardPins(top: number): Pin[] {
+		const pins: Pin[] = [];
+		for (let i = 0; i < top; i++) pins.push({ n: i + 1, x: (i - (top - 1) / 2) * PITCH, y: -ROW / 2 });
+		for (let i = 0; i < top - 1; i++) pins.push({ n: top + i + 1, x: (i - (top - 2) / 2) * PITCH, y: ROW / 2 });
+		return pins;
+	}
+
+	// High density DE-15: three rows of five, middle row shifted towards pin 1.
+	function hdPins(): Pin[] {
+		const p = 2.29;
+		const dy = 1.98;
+		const pins: Pin[] = [];
+		for (let i = 0; i < 5; i++) pins.push({ n: i + 1, x: (i - 2) * p, y: -dy });
+		for (let i = 0; i < 5; i++) pins.push({ n: i + 6, x: (i - 2.5) * p, y: 0 });
+		for (let i = 0; i < 5; i++) pins.push({ n: i + 11, x: (i - 2) * p, y: dy });
+		return pins;
+	}
+
+	const FLANGE_H = 12.55;
+	const SHELL_H = 7.9;
+	const HOLE_R = 1.55;
+
+	// Geometry in millimetres (nominal shell sizes E, A and B), as seen looking
+	// at the mating face of a male connector with the wide side of the D on top
+	// (pin 1 at top-left).
+	const GEOMETRY: Record<
+		Variant,
+		{ flangeW: number; holeSpacing: number; shellW: number; pinR: number; font: number; pins: Pin[] }
+	> = {
+		DE9: { flangeW: 30.81, holeSpacing: 24.99, shellW: 16.92, pinR: 1.05, font: 1.15, pins: standardPins(5) },
+		DE15: { flangeW: 30.81, holeSpacing: 24.99, shellW: 16.92, pinR: 0.85, font: 0.95, pins: hdPins() },
+		DA15: { flangeW: 39.14, holeSpacing: 33.32, shellW: 25.25, pinR: 1.05, font: 1.15, pins: standardPins(8) },
+		DB25: { flangeW: 53.04, holeSpacing: 47.04, shellW: 38.96, pinR: 1.05, font: 1.15, pins: standardPins(13) }
+	};
 
 	const g = $derived(GEOMETRY[variant]);
 
@@ -116,15 +131,15 @@
 		);
 	}
 
-	const shellOuter = $derived(dShape(g.shellW, g.shellH, 1.6));
-	const shellInner = $derived(dShape(g.shellW - 1.6, g.shellH - 1.6, 1.1));
+	const shellOuter = $derived(dShape(g.shellW, SHELL_H, 1.6));
+	const shellInner = $derived(dShape(g.shellW - 1.6, SHELL_H - 1.6, 1.1));
 	const flange = $derived(
 		roundedPath(
 			[
-				[-g.flangeW / 2, -g.flangeH / 2],
-				[g.flangeW / 2, -g.flangeH / 2],
-				[g.flangeW / 2, g.flangeH / 2],
-				[-g.flangeW / 2, g.flangeH / 2]
+				[-g.flangeW / 2, -FLANGE_H / 2],
+				[g.flangeW / 2, -FLANGE_H / 2],
+				[g.flangeW / 2, FLANGE_H / 2],
+				[-g.flangeW / 2, FLANGE_H / 2]
 			],
 			1
 		)
@@ -132,19 +147,27 @@
 
 	const labels = $derived(g.pins.map((p) => ({ n: p.n, ...place(p.x, p.y) })));
 
-	// Square viewBox big enough for any rotation.
-	const half = $derived(g.flangeW / 2 + 2);
+	// Square viewBox that holds the flange at any angle (its diagonal), so the
+	// stage and drawing scale stay fixed while rotating.
+	const MARGIN = 0.5;
+	const box = $derived.by(() => {
+		const side = Math.hypot(g.flangeW, FLANGE_H) + MARGIN * 2;
+		return { w: side, h: side };
+	});
+	const scale = $derived(Math.max(0, Math.min(maxWidth / box.w, maxHeight / box.h)));
 </script>
 
 <svg
-	viewBox="{-half} {-half} {half * 2} {half * 2}"
+	viewBox="{-box.w / 2} {-box.h / 2} {box.w} {box.h}"
+	width={box.w * scale}
+	height={box.h * scale}
 	role="img"
 	aria-label="{variant} {gender} connector, {view} view, rotated {rotation}°"
 >
 	<g transform="rotate({angle.current}) scale({flip.current}, 1)">
 		<path d={flange} class="flange" />
 		{#each [-1, 1] as side}
-			<circle cx={(side * g.holeSpacing) / 2} cy="0" r={g.holeR} class="hole" />
+			<circle cx={(side * g.holeSpacing) / 2} cy="0" r={HOLE_R} class="hole" />
 		{/each}
 		<path d={shellOuter} class="shell" class:back={view === 'back'} />
 		<path d={shellInner} class="insulator" />
@@ -155,18 +178,24 @@
 				r={g.pinR}
 				class={view === 'back' ? 'cup' : gender === 'male' ? 'pin' : 'socket'}
 				class:first={p.n === 1}
+				class:used={usedSet.has(p.n)}
+				class:dim={dimUnused && !usedSet.has(p.n)}
 			/>
 		{/each}
 	</g>
 	{#each labels as l (l.n)}
-		<text x={l.x} y={l.y} font-size={g.font} class:first={l.n === 1}>{l.n}</text>
+		<text
+			x={l.x}
+			y={l.y}
+			font-size={g.font}
+			class:used={usedSet.has(l.n)}
+			class:dim={dimUnused && !usedSet.has(l.n)}>{l.n}</text
+		>
 	{/each}
 </svg>
 
 <style>
 	svg {
-		width: 100%;
-		height: 100%;
 		display: block;
 	}
 	.flange {
@@ -207,6 +236,14 @@
 		stroke: var(--metal-edge);
 		stroke-width: 0.12;
 	}
+	circle.used {
+		fill: var(--used);
+		stroke: var(--used-edge);
+		stroke-width: 0.3;
+	}
+	circle.dim {
+		opacity: 0.35;
+	}
 	circle.first {
 		stroke: var(--accent);
 		stroke-width: 0.35;
@@ -221,5 +258,12 @@
 		stroke: var(--label-halo);
 		stroke-width: 0.25;
 		user-select: none;
+	}
+	text.used {
+		fill: var(--used-label);
+		stroke: none;
+	}
+	text.dim {
+		opacity: 0.45;
 	}
 </style>
