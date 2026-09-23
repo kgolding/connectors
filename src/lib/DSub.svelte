@@ -17,7 +17,8 @@
 		rotation = 0,
 		maxWidth = 800,
 		maxHeight = 600,
-		used = []
+		used = [],
+		animate = true
 	}: {
 		variant?: Variant;
 		gender?: Gender;
@@ -27,6 +28,8 @@
 		maxHeight?: number;
 		/** Pins to highlight; when non-empty, the other pins are dimmed. */
 		used?: number[];
+		/** When false, rotation and flip changes jump instead of animating. */
+		animate?: boolean;
 	} = $props();
 
 	const usedSet = $derived(new Set(used));
@@ -84,10 +87,10 @@
 	const angle = new Tween(0, { duration: 350, easing: cubicOut });
 	const flip = new Tween(1, { duration: 350, easing: cubicOut });
 	$effect(() => {
-		angle.target = rotation;
+		angle.set(rotation, animate ? undefined : { duration: 0 });
 	});
 	$effect(() => {
-		flip.target = mirrored ? -1 : 1;
+		flip.set(mirrored ? -1 : 1, animate ? undefined : { duration: 0 });
 	});
 
 	// Map a point from connector space to screen space: mirror, then rotate.

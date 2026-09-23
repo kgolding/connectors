@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
+	import { replaceState } from '$app/navigation';
 	import DSub, { PIN_COUNT, type Gender, type Variant, type View } from '$lib/DSub.svelte';
 
 	let variant = $state<Variant>('DA15');
@@ -28,6 +30,70 @@
 		return { pins: [...pins].sort((a, b) => a - b), invalid, max };
 	});
 
+	// Field values are mirrored into the URL query so a link can be shared.
+	// Defaults are left out to keep links short.
+	const VARIANTS: Record<string, Variant> = { de9: 'DE9', de15: 'DE15', da15: 'DA15', db25: 'DB25' };
+	const DEFAULT_TITLE = 'D-Sub connector pinout';
+	let title = $state(DEFAULT_TITLE);
+	let urlReady = $state(false);
+	let animate = $state(false);
+
+	onMount(async () => {
+		const q = new URLSearchParams(location.search);
+		const type = VARIANTS[q.get('type')?.toLowerCase() ?? ''];
+		if (type) variant = type;
+		const g = q.get('gender');
+		if (g === 'male' || g === 'female') gender = g;
+		const v = q.get('view');
+		if (v === 'back' || v === 'front') view = v;
+		const r = Number(q.get('rotate'));
+		if ([90, 180, 270].includes(r)) rotation = r;
+		usedText = q.get('pins') ?? '';
+		title = q.get('title')?.trim() || DEFAULT_TITLE;
+		urlReady = true;
+		// Show a shared link's rotation/view straight away, then animate changes.
+		await tick();
+		animate = true;
+	});
+
+	$effect(() => {
+		if (!urlReady) return;
+		const q = new URLSearchParams();
+		if (variant !== 'DA15') q.set('type', variant.toLowerCase());
+		if (gender !== 'male') q.set('gender', gender);
+		if (view !== 'back') q.set('view', view);
+		if (displayAngle !== 0) q.set('rotate', String(displayAngle));
+		if (usedText.trim()) q.set('pins', usedText.trim());
+		if (title.trim() && title.trim() !== DEFAULT_TITLE) q.set('title', title.trim());
+		const search = q.size ? `?${q}` : '';
+		if (search !== location.search) replaceState(location.pathname + search, {});
+	});
+
+	function titleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === 'Escape') {
+			e.preventDefault();
+			(e.currentTarget as HTMLElement).blur();
+		}
+	}
+
+	function titleBlur() {
+		title = title.replace(/\s+/g, ' ').trim() || DEFAULT_TITLE;
+	}
+
+	let shareStatus = $state<'idle' | 'copied' | 'failed'>('idle');
+	let shareTimer: ReturnType<typeof setTimeout>;
+	async function share() {
+		try {
+			await navigator.clipboard.writeText(location.href);
+			shareStatus = 'copied';
+		} catch {
+			shareStatus = 'failed';
+			window.prompt('Copy this link:', location.href);
+		}
+		clearTimeout(shareTimer);
+		shareTimer = setTimeout(() => (shareStatus = 'idle'), 2000);
+	}
+
 	const STAGE_PAD = 16;
 	const BUTTON_ROW = 64;
 	let canvasWidth = $state(0);
@@ -48,11 +114,23 @@
 <svelte:window {onkeydown} />
 
 <svelte:head>
-	<title>D-Sub Pinouts</title>
+	<title>{title.trim() && title.trim() !== DEFAULT_TITLE ? title.trim() : 'D-Sub Pinouts'}</title>
 </svelte:head>
 
 <main>
-	<h1>D-Sub connector pinout</h1>
+	<header>
+		<h1
+			contenteditable="plaintext-only"
+			spellcheck="false"
+			title="Click to edit the title"
+			bind:textContent={title}
+			onkeydown={titleKeydown}
+			onblur={titleBlur}
+		></h1>
+		<button class="share" onclick={share} aria-live="polite">
+			{shareStatus === 'copied' ? 'Link copied' : shareStatus === 'failed' ? 'Copy failed' : 'Share'}
+		</button>
+	</header>
 
 	<div class="layout">
 		<div class="controls">
@@ -124,7 +202,7 @@
 					bind:clientWidth={canvasWidth}
 					bind:clientHeight={canvasHeight}
 				>
-					<DSub {variant} {gender} {view} {rotation} maxWidth={canvasWidth} maxHeight={canvasHeight} used={parsed.pins} />
+					<DSub {variant} {gender} {view} {rotation} maxWidth={canvasWidth} maxHeight={canvasHeight} used={parsed.pins} {animate} />
 				</div>
 			</div>
 
@@ -188,9 +266,39 @@
 		display: flex;
 		flex-direction: column;
 	}
-	h1 {
-		font-size: 1.5rem;
+	header {
+		display: flex;
+		align-items: center;
+		gap: 12px;
 		margin: 0 0 16px;
+	}
+	h1 {
+		flex: 1;
+		min-width: 0;
+		font-size: 1.5rem;
+		margin: 0;
+		padding: 2px 6px;
+		margin-left: -6px;
+		border-radius: 6px;
+		outline: 2px dashed transparent;
+		outline-offset: 2px;
+		cursor: text;
+		overflow-wrap: anywhere;
+	}
+	h1:hover {
+		outline-color: var(--muted);
+	}
+	/* Match the Pins used textarea: the browser's own focus ring. */
+	h1:focus {
+		outline: auto;
+		outline-offset: 0;
+		background: var(--bg);
+	}
+	.share {
+		flex: none;
+		min-width: 7.5em;
+		height: 36px;
+		font-weight: 600;
 	}
 	.layout {
 		flex: 1;
