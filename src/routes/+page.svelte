@@ -99,6 +99,11 @@
 	let canvasWidth = $state(0);
 	let canvasHeight = $state(0);
 
+	// Back to 0° by the shortest way round.
+	function resetRotation() {
+		rotation = Math.round(rotation / 360) * 360;
+	}
+
 	function onkeydown(e: KeyboardEvent) {
 		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
 		// Arrow keys move between radio buttons, so leave form fields alone.
@@ -106,6 +111,9 @@
 		if (t.closest('input, select, textarea, [contenteditable]')) return;
 		if (e.key === 'ArrowLeft') rotation -= 90;
 		else if (e.key === 'ArrowRight') rotation += 90;
+		else if (e.key === 'ArrowUp') rotation += 180;
+		else if (e.key === 'ArrowDown') rotation -= 180;
+		else if (e.key === 'Home') resetRotation();
 		else return;
 		e.preventDefault();
 	}
@@ -186,9 +194,9 @@
 				>
 				<button
 					class="angle"
-					onclick={() => (rotation = Math.round(rotation / 360) * 360)}
+					onclick={resetRotation}
 					disabled={displayAngle === 0}
-					title="Reset rotation">{displayAngle}°</button
+					title="Reset rotation (Home)">{displayAngle}°</button
 				>
 				<button
 					class="corner right"
@@ -207,7 +215,7 @@
 				</div>
 			</div>
 
-			<p class="note">Pin 1 is outlined in red. Pin numbers stay upright whatever the rotation. Use ← and → to rotate.</p>
+			<p class="note">Pin 1 is outlined in red. Pin numbers stay upright whatever the rotation. Use ← and → to rotate 90°, ↑ and ↓ for 180°, Home to reset.</p>
 		</div>
 	</div>
 </main>

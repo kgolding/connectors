@@ -9,7 +9,7 @@ An interactive drawing of D-Sub connectors with numbered pins, for working out w
 - **Connector types:** DE-9, DE-15 HD (VGA), DA-15, DA-26 HD and DB-25, drawn to standard proportions.
 - **Male or female:** pins or sockets.
 - **Back or front view:** the wiring (solder cup) side or the mating face. The drawing mirrors correctly for each combination of gender and view.
-- **Rotation:** turn the connector in 90° steps with the corner buttons or the ← / → arrow keys. Pin numbers always stay upright and readable.
+- **Rotation:** turn the connector in 90° steps with the corner buttons or the ← / → arrow keys, by 180° with ↑ / ↓, and back to 0° with Home. Pin numbers always stay upright and readable.
 - **Pin highlighting:** list the pins in use (for example `1, 3, 5-7`) and they are highlighted, with the unused pins faded.
 
 Pin 1 is outlined in red so you can always see which way round the connector is.
