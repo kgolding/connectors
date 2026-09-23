@@ -32,7 +32,7 @@
 
 	// Field values are mirrored into the URL query so a link can be shared.
 	// Defaults are left out to keep links short.
-	const VARIANTS: Record<string, Variant> = { de9: 'DE9', de15: 'DE15', da15: 'DA15', db25: 'DB25' };
+	const VARIANTS: Record<string, Variant> = { de9: 'DE9', de15: 'DE15', da15: 'DA15', da26: 'DA26', db25: 'DB25' };
 	const DEFAULT_TITLE = 'D-Sub connector pinout';
 	let title = $state(DEFAULT_TITLE);
 	let urlReady = $state(false);
@@ -137,9 +137,10 @@
 			<fieldset>
 				<legend>Type</legend>
 				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DE9" /> DE-9</label>
-				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DE15" /> DE-15 HD (VGA)</label>
 				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DA15" /> DA-15</label>
+				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DE15" /> DE-15 HD (VGA)</label>
 				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DB25" /> DB-25</label>
+				<label><input type="radio" name="variant" autocomplete="off" bind:group={variant} value="DA26" /> DA-26 HD</label>
 			</fieldset>
 
 			<fieldset>

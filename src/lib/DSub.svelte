@@ -1,9 +1,9 @@
 <script lang="ts" module>
-	export type Variant = 'DE9' | 'DE15' | 'DA15' | 'DB25';
+	export type Variant = 'DE9' | 'DE15' | 'DA15' | 'DA26' | 'DB25';
 	export type Gender = 'male' | 'female';
 	export type View = 'front' | 'back';
 
-	export const PIN_COUNT: Record<Variant, number> = { DE9: 9, DE15: 15, DA15: 15, DB25: 25 };
+	export const PIN_COUNT: Record<Variant, number> = { DE9: 9, DE15: 15, DA15: 15, DA26: 26, DB25: 25 };
 </script>
 
 <script lang="ts">
@@ -49,14 +49,15 @@
 		return pins;
 	}
 
-	// High density DE-15: three rows of five, middle row shifted towards pin 1.
-	function hdPins(): Pin[] {
-		const p = 2.29;
-		const dy = 1.98;
+	// High density: three rows, 1.98mm apart, numbered row by row. Each row is
+	// [pin count, offset in pitches]; the middle row is shifted towards pin 1.
+	function hdPins(pitch: number, rows: [number, number][]): Pin[] {
 		const pins: Pin[] = [];
-		for (let i = 0; i < 5; i++) pins.push({ n: i + 1, x: (i - 2) * p, y: -dy });
-		for (let i = 0; i < 5; i++) pins.push({ n: i + 6, x: (i - 2.5) * p, y: 0 });
-		for (let i = 0; i < 5; i++) pins.push({ n: i + 11, x: (i - 2) * p, y: dy });
+		rows.forEach(([count, offset], r) => {
+			for (let i = 0; i < count; i++) {
+				pins.push({ n: pins.length + 1, x: (i - (count - 1) / 2 + offset) * pitch, y: (r - 1) * 1.98 });
+			}
+		});
 		return pins;
 	}
 
@@ -72,8 +73,9 @@
 		{ flangeW: number; holeSpacing: number; shellW: number; pinR: number; font: number; pins: Pin[] }
 	> = {
 		DE9: { flangeW: 30.81, holeSpacing: 24.99, shellW: 16.92, pinR: 1.05, font: 1.15, pins: standardPins(5) },
-		DE15: { flangeW: 30.81, holeSpacing: 24.99, shellW: 16.92, pinR: 0.85, font: 0.95, pins: hdPins() },
+		DE15: { flangeW: 30.81, holeSpacing: 24.99, shellW: 16.92, pinR: 0.85, font: 0.95, pins: hdPins(2.29, [[5, 0], [5, -0.5], [5, 0]]) },
 		DA15: { flangeW: 39.14, holeSpacing: 33.32, shellW: 25.25, pinR: 1.05, font: 1.15, pins: standardPins(8) },
+		DA26: { flangeW: 39.14, holeSpacing: 33.32, shellW: 25.25, pinR: 0.85, font: 0.95, pins: hdPins(2.29, [[9, 0.25], [9, -0.25], [8, -0.25]]) },
 		DB25: { flangeW: 53.04, holeSpacing: 47.04, shellW: 38.96, pinR: 1.05, font: 1.15, pins: standardPins(13) }
 	};
 
